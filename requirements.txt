@@ -1,0 +1,7 @@
+chromadb==1.5.5
+openai
+langchain-groq
+langgraph
+mysql-connector-python
+python-telegram-bot
+python-dotenv
