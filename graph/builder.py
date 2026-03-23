@@ -4,21 +4,15 @@ from langgraph.checkpoint.memory import MemorySaver
 from graph.state import BookingState
 from graph.nodes.classify_intent import classify_intent_node
 from graph.nodes.extraction import extraction_node
+from db.check_table import check_table_node
 from db.save_booking import save_booking_node
 
 
 def route_start(state: BookingState) -> str:
     intent = state.get("intent")
-    should_continue = state.get("should_continue")
-
-    if intent == "new_booking" and should_continue:
-        return "extraction"
-    if intent == "new_booking":
-        return "extraction"
-    if intent == "modify_booking":
-        return "modify"
-    if intent == "cancel_booking":
-        return "cancel"
+    if intent == "new_booking":    return "extraction"
+    if intent == "modify_booking": return "modify"
+    if intent == "cancel_booking": return "cancel"
     return "classify_intent"
 
 
@@ -31,8 +25,16 @@ def route_intent(state: BookingState) -> str:
 
 
 def route_extraction(state: BookingState) -> str:
+    if state.get("cancel_flow"):     return "cancelled"
     if state.get("should_continue"):
-        return "done"
+        if state.get("extraction_stage") == 2:
+            return "save"
+        return "check_table"
+    return "wait"
+
+
+def route_check_table(state: BookingState) -> str:
+    if state.get("should_continue"): return "extraction"
     return "wait"
 
 
@@ -40,6 +42,8 @@ def build_graph():
     builder = StateGraph(BookingState)
     builder.add_node("classify_intent", classify_intent_node)
     builder.add_node("extraction", extraction_node)
+    builder.add_node("check_table", check_table_node)
+    builder.add_node("save", save_booking_node)
 
     builder.add_conditional_edges(START, route_start, {
         "classify_intent": "classify_intent",
@@ -54,16 +58,19 @@ def build_graph():
         "cancel":     END,
     })
     builder.add_conditional_edges("extraction", route_extraction, {
-        "done": END,
-        "wait": END,
+        "check_table": "check_table",
+        "save":        "save",
+        "cancelled":   END,
+        "wait":        END,
     })
+    builder.add_conditional_edges("check_table", route_check_table, {
+        "extraction": "extraction",
+        "wait":       END,
+    })
+    builder.add_edge("save", END)
 
     memory = MemorySaver()
-    return builder.compile(
-        checkpointer=memory,
-        #interrupt_after=["extraction"]
-    )
+    return builder.compile(checkpointer=memory)
 
 
-# Синглтон графа
 graph = build_graph()

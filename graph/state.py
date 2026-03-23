@@ -9,3 +9,6 @@ class BookingState(MessagesState):
     should_continue: bool
     response_text: Optional[str]
     telegram_id: Optional[int]
+    cancel_flow: bool
+    available_tables: Optional[list]
+    extraction_stage: int

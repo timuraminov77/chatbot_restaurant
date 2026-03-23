@@ -69,7 +69,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
 
     if user_text == "❓ Задать вопрос":
-
         context.user_data["mode"] = "rag"
         context.user_data["thread_id"] = f"{telegram_id}_{int(time.time())}"
         await update.message.reply_text(
@@ -111,6 +110,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "intent": None,
             "booking_details": None,
             "should_continue": False,
+            "cancel_flow": False,
+            "available_tables": None,
+            "extraction_stage": 1,
             "telegram_id": telegram_id,
         }, config=config)
     else:
@@ -120,19 +122,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "telegram_id": telegram_id,
         }, config=config)
 
-    if result.get("should_continue") and result.get("booking_details"):
-        details = result["booking_details"]
-        if all(details.get(k) for k in ["date", "time", "guest_count", "phone", "name"]):
-            from db.save_booking import save_booking_node
-            save_result = save_booking_node(result)
-            response = (save_result.get("response_text") or "").strip() or "Бронь оформлена!"
+    # Пользователь передумал
+    if result.get("cancel_flow"):
+        context.user_data["thread_id"] = f"{telegram_id}_{int(time.time())}"
+        context.user_data["mode"] = None
+        response = (result.get("response_text") or "Оформление отменено.").strip()
+        await update.message.reply_text(response, reply_markup=MAIN_KEYBOARD)
+        return
 
-            import time
-            context.user_data["thread_id"] = f"{telegram_id}_{int(time.time())}"
-            context.user_data["mode"] = None
-
-            await update.message.reply_text(response, reply_markup=MAIN_KEYBOARD)
-            return
+    # Бронь успешно сохранена
+    if result.get("should_continue") and result.get("response_text", "").startswith("Бронь подтверждена"):
+        context.user_data["thread_id"] = f"{telegram_id}_{int(time.time())}"
+        context.user_data["mode"] = None
+        await update.message.reply_text(result["response_text"], reply_markup=MAIN_KEYBOARD)
+        return
 
     response = (result.get("response_text") or "").strip() or "Не понял, уточните запрос."
     await update.message.reply_text(response, reply_markup=MAIN_KEYBOARD)

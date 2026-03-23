@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime, timedelta
 import mysql.connector
 
@@ -20,77 +19,85 @@ def save_booking_node(state: BookingState) -> dict:
     print(">>> save_booking_node вызвана")
 
     details = state["booking_details"]
+    date_time = f"{details['date']}T{details['time']}:00"
+    duration_hours = details.get("duration") or 2
+    end_time = (datetime.fromisoformat(date_time) + timedelta(hours=duration_hours)).isoformat()
 
-    # Собираем date_time из отдельных полей
-    date_str = details.get("date")
-    time_str = details.get("time")
-    date_time = f"{date_str}T{time_str}:00"
+    tables = state.get("available_tables") or []
+    table = tables[0] if tables else None
 
-    conn = _get_conn()
-    cursor = conn.cursor()
-
-    # Upsert пользователя
-    cursor.execute("""
-        INSERT INTO users (telegram_id, full_name, phone)
-        VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE full_name=%s, phone=%s
-    """, (
-        state.get("telegram_id", 0),
-        details["name"],
-        details["phone"],
-        details["name"],
-        details["phone"]
-    ))
-
-    cursor.execute(
-        "SELECT id FROM users WHERE telegram_id=%s",
-        (state.get("telegram_id", 0),)
-    )
-    user_id = cursor.fetchone()[0]
-
-    # Ищем свободный стол
-    cursor.execute("""
-        SELECT id FROM restaurant.tables
-        WHERE is_active = 1
-          AND id NOT IN (
-              SELECT table_id FROM bookings
-              WHERE status IN ('pending','confirmed','arrived')
-                AND start_time < %s
-                AND end_time > %s
-          )
-        LIMIT 1
-    """, (date_time, date_time))
-
-    table = cursor.fetchone()
     if not table:
-        conn.close()
         return {
-            "response_text": "К сожалению, на это время свободных столов нет.",
+            "response_text": "Ошибка выбора стола, попробуйте снова.",
             "should_continue": False
         }
 
-    table_id = table[0]
+    table_id = table["id"]
+    conn = _get_conn()
+    cursor = conn.cursor()
 
-    # Создаём бронь
-    booking_id = str(uuid.uuid4())
-    end_time_dt = datetime.fromisoformat(date_time) + timedelta(hours=2)
-    end_time = end_time_dt.isoformat()
+    try:
+        cursor.execute("START TRANSACTION")
 
-    cursor.execute("""
-        INSERT INTO bookings
-            (id, user_id, table_id, start_time, end_time, guest_count, status)
-        VALUES (%s, %s, %s, %s, %s, %s, 'confirmed')
-    """, (booking_id, user_id, table_id, date_time, end_time, details["guest_count"]))
+        cursor.execute("SELECT id FROM tables WHERE id = %s FOR UPDATE", (table_id,))
+        cursor.fetchall()  # читаем результат
 
-    conn.commit()
-    conn.close()
+        cursor.execute("""
+            SELECT COUNT(*) FROM bookings
+            WHERE table_id = %s
+              AND start_time < %s
+              AND end_time > %s
+        """, (table_id, end_time, date_time))
 
-    return {
-        "response_text": (
-            f"Бронь подтверждена! 🎉\n"
-            f"📅 {details['date']} в {details['time']}\n"
-            f"👥 Гостей: {details['guest_count']}\n"
-            f"🔖 Номер брони: {booking_id[:8].upper()}"
-        ),
-        "should_continue": True
-    }
+        count = cursor.fetchone()[0]
+
+        if count > 0:
+            conn.rollback()
+            conn.close()
+            return {
+                "response_text": "К сожалению, этот стол только что заняли 😔\nПопробуйте другое время — на какое?",
+                "should_continue": False,
+                "booking_details": {**details, "date": None, "time": None},
+                "available_tables": [],
+            }
+
+        cursor.execute("""
+            INSERT INTO users (telegram_id, name, phone)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE name=%s, phone=%s
+        """, (
+            state.get("telegram_id", 0),
+            details["name"], details["phone"],
+            details["name"], details["phone"]
+        ))
+
+        cursor.execute(
+            "SELECT id FROM users WHERE telegram_id=%s",
+            (state.get("telegram_id", 0),)
+        )
+        user_id = cursor.fetchone()[0]
+
+        cursor.execute("""
+            INSERT INTO bookings
+                (user_id, table_id, start_time, end_time, count_clients)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (user_id, table_id, date_time, end_time, details["guest_count"]))
+
+        booking_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return {
+            "response_text": (
+                f"Бронь подтверждена! 🎉\n"
+                f"📅 {details['date']} в {details['time']}\n"
+                f"👥 Гостей: {details['guest_count']}\n"
+                f"🔖 Номер брони: {booking_id}"
+            ),
+            "should_continue": True
+        }
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        raise e
