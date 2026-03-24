@@ -89,6 +89,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if context.user_data.get("mode") == "rag":
         try:
+            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
             loop = asyncio.get_running_loop()
             response = await loop.run_in_executor(None, rag_answer, user_text)
             await update.message.reply_text(response, reply_markup=MAIN_KEYBOARD)
@@ -103,6 +104,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     saved = graph.get_state(config)
     is_new = not saved.values
 
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     if is_new:
         result = graph.invoke({
             "messages": [{"role": "user", "content": user_text}],

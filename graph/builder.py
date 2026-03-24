@@ -6,7 +6,7 @@ from graph.nodes.classify_intent import classify_intent_node
 from graph.nodes.extraction import extraction_node
 from db.check_table import check_table_node
 from db.save_booking import save_booking_node
-
+from graph.nodes.validate_hours import validate_hours_node
 
 def route_start(state: BookingState) -> str:
     intent = state.get("intent")
@@ -29,9 +29,12 @@ def route_extraction(state: BookingState) -> str:
     if state.get("should_continue"):
         if state.get("extraction_stage") == 2:
             return "save"
-        return "check_table"
+        return "validate_hours"
     return "wait"
 
+def route_validate_hours(state: BookingState) -> str:
+    if state.get("should_continue"): return "check_table"
+    return "wait"
 
 def route_check_table(state: BookingState) -> str:
     if state.get("should_continue"): return "extraction"
@@ -44,6 +47,7 @@ def build_graph():
     builder.add_node("extraction", extraction_node)
     builder.add_node("check_table", check_table_node)
     builder.add_node("save", save_booking_node)
+    builder.add_node("validate_hours", validate_hours_node)
 
     builder.add_conditional_edges(START, route_start, {
         "classify_intent": "classify_intent",
@@ -58,10 +62,14 @@ def build_graph():
         "cancel":     END,
     })
     builder.add_conditional_edges("extraction", route_extraction, {
-        "check_table": "check_table",
+        "validate_hours": "validate_hours",
         "save":        "save",
         "cancelled":   END,
         "wait":        END,
+    })
+    builder.add_conditional_edges("validate_hours", route_validate_hours, {
+        "check_table": "check_table",
+        "wait": END,
     })
     builder.add_conditional_edges("check_table", route_check_table, {
         "extraction": "extraction",
