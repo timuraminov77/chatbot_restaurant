@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from graph.state import BookingState
 
 SCHEDULE = {
@@ -29,7 +29,6 @@ def validate_hours_node(state: BookingState) -> dict:
     visit_minutes = dt.hour * 60 + dt.minute
     open_minutes = open_h * 60 + open_m
 
-    # Полночь и после — считаем как следующий день
     if close_h == 0:
         close_minutes = 24 * 60
     else:
@@ -50,6 +49,19 @@ def validate_hours_node(state: BookingState) -> dict:
                 f"В {day_name} ресторан работает с {open_fmt} до {close_fmt} "
                 f"(последний заказ в {last_order // 60:02d}:{last_order % 60:02d}).\n"
                 f"На какое время вас записать?"
+            ),
+        }
+
+    now = datetime.now()
+    min_time = now + timedelta(hours=2)
+
+    if dt < min_time:
+        return {
+            "should_continue": False,
+            "booking_details": {**details, "date": None, "time": None},
+            "response_text": (
+                f"Бронь возможна минимум за 2 часа до визита.\n"
+                f"На какое время записать?"
             ),
         }
 

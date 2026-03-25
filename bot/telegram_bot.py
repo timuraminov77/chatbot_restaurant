@@ -6,10 +6,12 @@ import asyncio
 from config import TELEGRAM_TOKEN
 from graph.builder import graph
 from RAG.chroma_store import get_collection, query_collection
+from langsmith import traceable
 
 from openai import OpenAI
+from langsmith import wrappers
 
-openai_client = OpenAI()
+openai_client = wrappers.wrap_openai(OpenAI())
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     [
@@ -21,7 +23,7 @@ MAIN_KEYBOARD = ReplyKeyboardMarkup(
 
 chroma_collection = get_collection()
 
-
+@traceable(name="rag_answer")
 def rag_answer(question: str) -> str:
     print(">>> rag_answer вызвана, вопрос:", question)
     docs = query_collection(chroma_collection, question, n_results=3)
@@ -115,6 +117,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "cancel_flow": False,
             "available_tables": None,
             "extraction_stage": 1,
+            "modify_step": None,
+            "user_bookings": None,
+            "selected_booking": None,
+            "new_datetime": None,
+            "new_guest_count": None,
             "telegram_id": telegram_id,
         }, config=config)
     else:
@@ -130,6 +137,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["mode"] = None
         response = (result.get("response_text") or "Оформление отменено.").strip()
         await update.message.reply_text(response, reply_markup=MAIN_KEYBOARD)
+        return
+
+        # Бронь успешно перенесена
+    if result.get("should_continue") and result.get("response_text", "").startswith("Бронь перенесена"):
+        context.user_data["thread_id"] = f"{telegram_id}_{int(time.time())}"
+        context.user_data["mode"] = None
+        await update.message.reply_text(result["response_text"], reply_markup=MAIN_KEYBOARD)
         return
 
     # Бронь успешно сохранена

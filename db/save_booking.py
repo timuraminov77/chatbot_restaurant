@@ -4,6 +4,8 @@ import mysql.connector
 from config import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
 from graph.state import BookingState
 
+import requests
+from config import ADMIN_TG_ID, TELEGRAM_TOKEN
 
 def _get_conn():
     return mysql.connector.connect(
@@ -86,6 +88,23 @@ def save_booking_node(state: BookingState) -> dict:
         booking_id = cursor.lastrowid
         conn.commit()
         conn.close()
+
+        def _notify_admin(text: str):
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                    json={"chat_id": ADMIN_TG_ID, "text": text}
+                )
+            except Exception as e:
+                print(">>> Ошибка уведомления админа:", e)
+
+        _notify_admin(
+            f"🆕 Новая бронь!\n"
+            f"👤 Telegram ID: {state.get('telegram_id')}\n"
+            f"📅 {details['date']} в {details['time']}\n"
+            f"👥 Гостей: {details['guest_count']}\n"
+            f"🔖 Номер брони: {booking_id}"
+        )
 
         return {
             "response_text": (
