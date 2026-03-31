@@ -123,6 +123,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "new_datetime": None,
             "new_guest_count": None,
             "telegram_id": telegram_id,
+            "cancel_step": None,
+            "cancel_booking_id": None
         }, config=config)
     else:
         result = graph.invoke({
@@ -131,7 +133,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "telegram_id": telegram_id,
         }, config=config)
 
-    # Пользователь передумал
     if result.get("cancel_flow"):
         context.user_data["thread_id"] = f"{telegram_id}_{int(time.time())}"
         context.user_data["mode"] = None
@@ -139,14 +140,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(response, reply_markup=MAIN_KEYBOARD)
         return
 
-        # Бронь успешно перенесена
     if result.get("should_continue") and result.get("response_text", "").startswith("Бронь перенесена"):
         context.user_data["thread_id"] = f"{telegram_id}_{int(time.time())}"
         context.user_data["mode"] = None
         await update.message.reply_text(result["response_text"], reply_markup=MAIN_KEYBOARD)
         return
 
-    # Бронь успешно сохранена
+    if result.get("should_continue") and result.get("response_text", "").startswith("Бронь #"):
+        context.user_data["thread_id"] = f"{telegram_id}_{int(time.time())}"
+        context.user_data["mode"] = None
+        await update.message.reply_text(result["response_text"], reply_markup=MAIN_KEYBOARD)
+        return
+
     if result.get("should_continue") and result.get("response_text", "").startswith("Бронь подтверждена"):
         context.user_data["thread_id"] = f"{telegram_id}_{int(time.time())}"
         context.user_data["mode"] = None

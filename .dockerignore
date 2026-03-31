@@ -1,0 +1,30 @@
+# Окружение Python
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Базы данных и локальные хранилища
+*.db
+*.sqlite3
+mysql_data/
+
+RAG/chroma_db/
+
+# Системные файлы и IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+.DS_Store
+
+# Файлы Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Лишние логи
+*.log

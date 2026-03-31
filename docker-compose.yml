@@ -1,0 +1,35 @@
+services:
+  bot:
+    build: .
+    container_name: restaurant_bot
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./RAG/chroma_db:/app/RAG/chroma_db
+
+  db:
+    image: mysql:8.0
+    container_name: restaurant_mysql
+    restart: always
+    environment:
+      # Оставляем только эти две переменные для инициализации
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+    ports:
+      - "3307:3306"  # Внешний порт 3307, чтобы не было конфликта с локальным MySQL
+    healthcheck:
+      # Проверка здоровья базы (используем пароль root)
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init_db:/docker-entrypoint-initdb.d
+
+volumes:
+  mysql_data:

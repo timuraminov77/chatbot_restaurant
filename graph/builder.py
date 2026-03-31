@@ -5,9 +5,11 @@ from graph.state import BookingState
 from graph.nodes.classify_intent import classify_intent_node
 from graph.nodes.extraction import extraction_node
 from graph.nodes.modify_booking import modify_booking_node
+from graph.nodes.cancel_booking import cancel_booking_node
 from db.check_table import check_table_node
 from db.save_booking import save_booking_node
 from db.modify_booking import modify_booking_node_db
+from db.cancel_booking import cancel_booking_node_db
 from graph.nodes.validate_hours import validate_hours_node
 
 
@@ -17,7 +19,6 @@ def route_start(state: BookingState) -> str:
     if intent == "modify_booking": return "modify"
     if intent == "cancel_booking": return "cancel"
     return "classify_intent"
-
 
 def route_intent(state: BookingState) -> str:
     intent = state.get("intent")
@@ -54,8 +55,18 @@ def route_modify(state: BookingState) -> str:
 
 def route_modify_db(state: BookingState) -> str:
     if state.get("should_continue"): return "done"
-    # нет мест или не те часы — возвращаем в modify за новой датой/временем
     return "modify"
+
+
+def route_cancel(state: BookingState) -> str:
+    if state.get("should_continue") and state.get("cancel_step") == "done":
+        return "cancel_db"
+    return "wait"
+
+
+def route_cancel_db(state: BookingState) -> str:
+    if state.get("should_continue"): return "done"
+    return "wait"
 
 
 def build_graph():
@@ -67,18 +78,20 @@ def build_graph():
     builder.add_node("save", save_booking_node)
     builder.add_node("modify", modify_booking_node)
     builder.add_node("modify_db", modify_booking_node_db)
+    builder.add_node("cancel", cancel_booking_node)
+    builder.add_node("cancel_db", cancel_booking_node_db)
 
     builder.add_conditional_edges(START, route_start, {
         "classify_intent": "classify_intent",
         "extraction":      "extraction",
         "modify":          "modify",
-        "cancel":          END,
+        "cancel":          "cancel",
     })
     builder.add_conditional_edges("classify_intent", route_intent, {
         "extraction": "extraction",
         "ask_intent": END,
         "modify":     "modify",
-        "cancel":     END,
+        "cancel":     "cancel",
     })
     builder.add_conditional_edges("extraction", route_extraction, {
         "validate_hours": "validate_hours",
@@ -101,6 +114,14 @@ def build_graph():
     builder.add_conditional_edges("modify_db", route_modify_db, {
         "done":   END,
         "modify": "modify",
+    })
+    builder.add_conditional_edges("cancel", route_cancel, {
+        "cancel_db": "cancel_db",
+        "wait":      END,
+    })
+    builder.add_conditional_edges("cancel_db", route_cancel_db, {
+        "done": END,
+        "wait": END,
     })
     builder.add_edge("save", END)
 

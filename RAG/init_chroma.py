@@ -1,7 +1,3 @@
-"""
-Запускать один раз для загрузки info.md в ChromaDB.
-python scripts/init_chroma.py
-"""
 import sys
 sys.path.insert(0, ".")
 

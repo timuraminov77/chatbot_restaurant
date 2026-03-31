@@ -13,9 +13,10 @@ class BookingState(MessagesState):
     available_tables: Optional[list]
     extraction_stage: int
 
-    # ветка modify
     modify_step: Optional[str]
     user_bookings: Optional[list]
     selected_booking: Optional[dict]
     new_datetime: Optional[dict]
     new_guest_count: Optional[int]
+    cancel_step: Optional[str]
+    cancel_booking_id: Optional[int]
