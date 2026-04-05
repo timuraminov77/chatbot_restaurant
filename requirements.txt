@@ -5,3 +5,4 @@ langgraph
 mysql-connector-python
 python-telegram-bot
 python-dotenv
+langchain-openai
