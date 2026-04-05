@@ -18,4 +18,4 @@ DB_NAME     = os.getenv("DB_NAME", "restaurant")
 BASE_DIR = Path(__file__).parent  # всегда корень проекта, независимо от запуска
 CHROMA_PATH = os.getenv("CHROMA_PATH", str(BASE_DIR / "RAG" / "chroma_db"))
 INFO_MD_PATH = os.getenv("INFO_MD_PATH", "./info.md")
-ADMIN_TG_ID = 7533405423
+ADMIN_TG_ID = int(os.getenv('ADMIN_TG_ID', 0))
